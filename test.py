@@ -5,19 +5,21 @@ import cv2
 from PIL import Image
 import numpy as np
 import librosa
+from denseav.plotting import plot_attention_video, plot_2head_attention_video, plot_feature_video, display_video_in_notebook
+from denseav.shared import norm, crop_to_divisor, blur_dim
 
 # Check CUDA availability
 print("CUDA Available:", torch.cuda.is_available())
 print("CUDA Device Name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No GPU found")
 
 # Load DenseAV model
-model = torch.hub.load('mhamilton723/DenseAV', 'sound_and_language').cuda()
+model = torch.hub.load('mhamilton723/DenseAV', 'sound_and_language').cpu()
 print("DenseAV model loaded successfully!")
 
 # Paths
-image_path = r"C:\Users\Aisha\Desktop\VGSVis\input\example_figure.png"
-audio_path = r"C:\Users\Aisha\Desktop\VGSVis\input\example_figure_caption.mp3"
-output_video_path = r"C:\Users\Aisha\Desktop\VGSVis\input\example_figure_video.mp4"
+image_path = r"/Users/aishaeldeeb/Desktop/VGSVis/input/example_figure.png"
+audio_path = r"/Users/aishaeldeeb/Desktop/VGSVis/input/example_figure.mp3"
+output_video_path = r"/Users/aishaeldeeb/Desktop/VGSVis/input/example_figure_video.mp4"
 
 # Create a video matching the audio length
 image = Image.open(image_path).convert("RGB")
@@ -45,7 +47,7 @@ if sample_rate != target_sample_rate:
     waveform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sample_rate)(waveform)
 
 # Prepare audio input
-audio_input = {"audio": waveform.cuda()}
+audio_input = {"audio": waveform.cpu()}
 
 # Load video and extract frames
 cap = cv2.VideoCapture(output_video_path)
@@ -65,7 +67,7 @@ cap.release()
 transform = T.Compose([
     T.Resize((224, 224)),
     T.ToTensor(),
-    T.Lambda(lambda x: x.cuda()),
+    T.Lambda(lambda x: x.cpu()),
 ])
 
 frames_tensor = torch.stack([transform(frame) for frame in frames])
@@ -73,20 +75,21 @@ print(f"Video frames tensor shape: {frames_tensor.shape}")  # Should be [num_fra
 
 # Model Inference
 with torch.no_grad():
-    audio_features = model.forward_audio(audio_input)
-    audio_features = {k: v.cpu() for k, v in audio_features.items()}  # Move to CPU
+    print("Running model inference")
+    audio_feats = model.forward_audio(audio_input)
+    audio_feats = {k: v.cpu() for k,v in audio_feats.items()}
+    image_feats = model.forward_image({"frames": frames_tensor.unsqueeze(0)}, max_batch_size=2)
+    image_feats = {k: v.cpu() for k,v in image_feats.items()}
 
-    # Pass frames in batches for memory management
-    batch_size = 8
-    image_features_list = []
-    for i in range(0, len(frames_tensor), batch_size):
-        batch_frames = frames_tensor[i:i + batch_size].unsqueeze(0)  # Add batch dimension
-        image_feats = model.forward_image({"frames": batch_frames.cuda()})
-        image_feats = {k: v.cpu() for k, v in image_feats.items()}
-        image_features_list.append(image_feats)
+    sim_by_head = model.sim_agg.get_pairwise_sims(
+        {**image_feats, **audio_feats},
+        raw=False,
+        agg_sim=False,
+        agg_heads=False
+    ).mean(dim=-2).cpu()
 
-    # Combine image features from all batches
-    image_features = {k: torch.cat([batch[k] for batch in image_features_list]) for k in image_features_list[0].keys()}
-
-    print("Audio features:", {k: v.shape for k, v in audio_features.items()})
-    print("Image features:", {k: v.shape for k, v in image_features.items()})
+    sim_by_head = blur_dim(sim_by_head, window=3, dim=-1)
+    
+    print("Audio features:", {k: v.shape for k, v in audio_feats.items()})
+    print("Image features:", {k: v.shape for k, v in image_feats.items()})
+    print("Sim by head:", {sim_by_head.shape})
