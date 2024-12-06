@@ -49,11 +49,14 @@ class VSVisUI(ctk.CTk):
         self.drawing_enabled = False
         self.is_drawing = False
         self.tensor = None
+
         # Variables for bounding box
         self.start_x = None
         self.start_y = None
         self.rect = None
         self.bbox_coordinates = None
+
+        self.mode = 0 # 0 for default, 1 for no_infer, 2 for inference
 
         # Initialize pygame for audio playback
         pygame.mixer.init()
@@ -69,7 +72,7 @@ class VSVisUI(ctk.CTk):
         self.only_vis.grid(row=1, column=0, padx=50, pady=30)
 
         # Inference
-        self.inf_vis = ctk.CTkButton(self.start_menu_frame, text="Inference and Visualization", command=self.inference_init)
+        self.inf_vis = ctk.CTkButton(self.start_menu_frame, text="Inference & Visualization", command=self.inference_init)
         self.inf_vis.grid(row=1, column=1, padx=50, pady=30)
 
 
@@ -82,7 +85,8 @@ class VSVisUI(ctk.CTk):
 
 
     def inference_init(self):
-        self.title.configure(text="VSVis Visualizer\n\n\nInference Folder Select")
+        self.mode = 2
+        self.title.configure(text="VSVis Visualizer\n\n- Inference & Visualization -\nInference Folder Select")
         self.folder_path = filedialog.askdirectory(title="Select Folder")
         foldername = self.folder_path.split("/")[-1]
         self.title.configure(text=f"VSVis Visualizer\n\n\nInference Running - {foldername}")
@@ -98,12 +102,12 @@ class VSVisUI(ctk.CTk):
             self.create_viz_ui()
 
         else:
-            self.title.configure(text="VSVis Visualizer\n\n\n(!) Folder Select Error")
+            self.title.configure(text="VSVis Visualizer\n\n- Inference & Visualization -\n(!) Folder Select Error")
         
 
     def run_inference(self):
             
-            self.title.configure(text=f"VSVis Visualizer\n\n\nRunning Inference - Initializing...")
+            self.title.configure(text=f"VSVis Visualizer\n\n- Inference & Visualization -\nRunning Inference - Initializing...")
 
             # Check CUDA availability
             print("CUDA Available:", torch.cuda.is_available())
@@ -113,7 +117,7 @@ class VSVisUI(ctk.CTk):
             model = torch.hub.load('mhamilton723/DenseAV', 'language').cuda()
             print("DenseAV model loaded successfully!")
 
-            self.title.configure(text=f"VSVis Visualizer\n\n\nRunning Inference - Model Loaded. Loading Image and Audio...")
+            self.title.configure(text=f"VSVis Visualizer\n\n- Inference & Visualization -\nRunning Inference - Model Loaded. Loading Image and Audio...")
 
             # Paths
             image_name = [f for f in os.listdir(self.folder_path) if f.endswith(".png")][0]
@@ -176,7 +180,7 @@ class VSVisUI(ctk.CTk):
 
             # Model Inference
 
-            self.title.configure(text=f"VSVis Visualizer\n\n\nRunning Inference - Running Inference...")
+            self.title.configure(text=f"VSVis Visualizer\n\n- Inference & Visualization -\nRunning Inference - Running Inference...")
 
             print("Running model inference")
             audio_feats = model.forward_audio(audio_input)
@@ -195,7 +199,7 @@ class VSVisUI(ctk.CTk):
             print("Image features:", {k: v.shape for k, v in image_feats.items()})
             print("Sim by head:", {sim_by_head.shape})
 
-            self.title.configure(text=f"VSVis Visualizer\n\n\nInference Complete. Initializing Visualization...")
+            self.title.configure(text=f"VSVis Visualizer\n\n- Inference & Visualization -\nInference Complete. Initializing Visualization...")
 
             # Defining Helpers            
             def get_inferno_with_alpha():
@@ -260,13 +264,16 @@ class VSVisUI(ctk.CTk):
             self.cap_rep = 1
             pygame.mixer.music.load(audio_path)
 
-            self.title.configure(text=f"VSVis Visualizer\n\n\nVisualization Ready")
+            self.title.configure(text=f"VSVis Visualizer\n\n- Inference & Visualization -\nVisualization Ready")
 
 
     def no_infer_init(self):
         # Show a file dialog to select the video file
+        self.mode = 1
+        self.title.configure(text="VSVis Visualizer\n\nOnly Visualization\nFolder Select")
         self.folder_path = filedialog.askdirectory(title="Select Folder")
         if self.folder_path:
+            self.title.configure(text=f"VSVis Visualizer\n\n- Only Visualization -\nRunning - {self.folder_path.split('/')[-1]}")
             # Hide the start menu
             # self.start_menu_frame.grid_remove()
             self.start_menu_frame.pack_forget()
@@ -317,12 +324,9 @@ class VSVisUI(ctk.CTk):
         self.range_mode = ctk.CTkButton(
             self.control_buttons_frame, text="Time Period", command=self.range_slider_init
         )
-        self.bounding_box = ctk.CTkButton(
-            self.control_buttons_frame, text="Enable BBox", command=self.toggle_drawing
-        )
                 # Connect Matplotlib events
         self.range_mode.grid(row=0, column=1, padx=21)
-        self.bounding_box.grid(row=0, column=2, padx=21)
+        
 
         self.fig, self.ax = plt.subplots(figsize=(6, 4))
         self.chart_canvas = FigureCanvasTkAgg(self.fig, self.video_frame)
@@ -365,7 +369,8 @@ class VSVisUI(ctk.CTk):
             try:
                 pygame.mixer.music.pause()
             except:
-                print("Error pausing audio.")
+                # print("Error pausing audio.")
+                pass
             self.update_vis_label("Paused.")
         
         self.update_vis_label("")
@@ -390,7 +395,7 @@ class VSVisUI(ctk.CTk):
                 self.playing = False
                 pygame.mixer.music.stop()
                 self.seek_video(0)
-                self.update_vis_label("Audio End")
+                self.update_vis_label("End")
                 break
 
     def seek_video(self, value):
@@ -400,7 +405,8 @@ class VSVisUI(ctk.CTk):
             try:
                 pygame.mixer.music.set_pos(self.current_frame / self.total_frames * self.duration)
             except:
-                print("Error pausing audio.")        
+                # print("Error pausing audio.")  
+                pass      
 
 
     def update_vis_label(self, text):
@@ -412,6 +418,7 @@ class VSVisUI(ctk.CTk):
         if self.ranger == 1:
             self.range_slider.destroy()
             self.range_btn.destroy()
+            self.eval_btn.destroy()
             self.ranger = 0
             self.range_mode.configure(text="Time Period")
         else:
@@ -419,8 +426,15 @@ class VSVisUI(ctk.CTk):
             hRight = ctk.DoubleVar(value = 0.85)  #right handle variable initialised to value 0.85
             self.range_slider = RangeSliderH( app , [hLeft, hRight] , padX = 12, Height= 33, Width=624 , bgColor='#222222', font_color='#222222', font_size=0)
             self.range_slider.pack()
-            self.range_btn = ctk.CTkButton(self, text="Done", command=self.range_show)
-            self.range_btn.pack(pady=10)
+
+            self.time_period_frame = ctk.CTkFrame(self)
+            self.time_period_frame.pack(pady=10)
+
+            self.range_btn = ctk.CTkButton(self.time_period_frame, text="Done", command=self.range_show)
+            self.eval_btn = ctk.CTkButton(
+            self.time_period_frame, text="Evaluation Mode", command=self.toggle_drawing)
+            self.eval_btn.grid(row=0, column=2, padx=21)
+            self.range_btn.grid(row=0, column=1, padx=21)
             self.ranger = 1
             self.range_mode.configure(text="Back to Playback")
     
@@ -453,13 +467,30 @@ class VSVisUI(ctk.CTk):
 
 
     def toggle_drawing(self):
+        if self.mode == 1: 
+            self.update_vis_label("Evaluation Mode for Only Visualization Coming Soon!") 
+            return
+
         """Toggle the bounding box drawing mode."""
         self.drawing_enabled = not self.drawing_enabled
-        self.bounding_box.configure(
-            text="Disable BBox" if self.drawing_enabled else "Enable BBox"
+        self.eval_btn.configure(
+            text="Exit Evaluations" if self.drawing_enabled else "Evaluation Mode"    
         )
-
-        if not self.drawing_enabled:
+        self.update_vis_label("Select an area in the image" if self.drawing_enabled else "Evaluation Disabled")
+        self.geometry("800x800" if self.drawing_enabled else "800x750")
+        if self.drawing_enabled:
+            self.eval_res_frame = ctk.CTkFrame(self)
+            self.eval_res_frame.pack(pady=10)
+            self.eval_as_obj = ctk.CTkLabel(self.eval_res_frame, text="Alignment Score \n(Object)\n\n-")
+            self.eval_as_obj.grid(row=0, column=0, padx=21)
+            self.eval_as_word = ctk.CTkLabel(self.eval_res_frame, text="Alignment Score \n(Word)\n\n-")
+            self.eval_as_word.grid(row=0, column=1, padx=21)
+            self.eval_glc_obj = ctk.CTkLabel(self.eval_res_frame, text="Glancing Score \n(Object)\n\n-")
+            self.eval_glc_obj.grid(row=0, column=2, padx=21)
+            self.eval_glc_word = ctk.CTkLabel(self.eval_res_frame, text="Glancing Score \n(Word)\n\n-")
+            self.eval_glc_word.grid(row=0, column=3, padx=21)
+        else:
+            self.eval_res_frame.pack_forget()
             self.clear_current_bounding_boxes()
 
 
@@ -480,7 +511,7 @@ class VSVisUI(ctk.CTk):
 
         if not self.drawing_enabled:
             # Remove all bounding boxes
-            self.clear_all_bounding_boxes()
+            self.clear_current_bounding_boxes()
 
 
     def on_motion(self, event):
@@ -509,6 +540,7 @@ class VSVisUI(ctk.CTk):
                                      max(y0, y1))
             self.is_drawing = False
             print(f"Bounding Box Coordinates: {self.bbox_coordinates}")
+            self.update_vis_label(f"Bounding Box Coordinates: {self.bbox_coordinates}")
             self.calculate_evaluation_metrics()
 
 
@@ -558,9 +590,15 @@ class VSVisUI(ctk.CTk):
                 rval,
                 self.bbox_coordinates
             )
-            print(as_obj)
-            print(as_word)
-            print(glc_obj)
+            # print(as_obj)
+            # print(as_word)
+            # print(glc_obj)
+            # print(glc_word)
+            self.eval_as_obj.configure(text=f"Alignment Score \n(Object)\n\n{as_obj:f}")
+            self.eval_as_word.configure(text=f"Alignment Score \n(Word)\n\n{as_word:f}")
+            self.eval_glc_obj.configure(text=f"Glancing Score \n(Object)\n\n{glc_obj:f}")
+            self.eval_glc_word.configure(text=f"Glancing Score \n(Word)\n\n{glc_word:f}")
+            # glc_word = eval.get_glancing_score_word()
             # as_word = eval.get_alignment_score_word()
             # glc_obj = eval.get_glancing_score_object()
             # glc_word = eval.get_glancing_score_word()
