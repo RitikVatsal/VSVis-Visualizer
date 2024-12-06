@@ -36,6 +36,14 @@ class VSVisUI(ctk.CTk):
         self.range_slider = None
         self.range_btn = None
         self.ranger = 0
+        self.bbox_btn = None
+        self.drawing_enabled = False
+        self.is_drawing = False
+        # Variables for bounding box
+        self.start_x = None
+        self.start_y = None
+        self.rect = None
+        self.bbox_coordinates = None
 
         # Initialize pygame for audio playback
         pygame.mixer.init()
@@ -46,7 +54,7 @@ class VSVisUI(ctk.CTk):
         self.start_menu_frame = ctk.CTkFrame(self)
         self.start_menu_frame.pack(pady=10)
         
-        # If No Inferece (Overlay file needed)
+        # If No Inference (Overlay file needed)
         self.only_vis = ctk.CTkButton(self.start_menu_frame, text="Only Visualization", command=self.no_infer_init)
         self.only_vis.grid(row=1, column=0, padx=50, pady=30)
 
@@ -55,19 +63,19 @@ class VSVisUI(ctk.CTk):
         self.inf_vis.grid(row=1, column=1, padx=50, pady=30)
 
 
-
         # Placeholder for other widgets that will appear dynamically
         self.video_frame = None
         self.timeline_slider = None
         self.vis_label = None
         self.control_buttons_frame = None
-        
+        self.side_panel = None
+
 
     def inference_init(self):
         self.title.configure(text="VSVis Visualizer\n\n\nInference Folder Select")
         self.folder_path = filedialog.askdirectory(title="Select Folder")
-        fodlername = self.folder_path.split("/")[-1]
-        self.title.configure(text=f"VSVis Visualizer\n\n\nInference Running - {fodlername}")
+        foldername = self.folder_path.split("/")[-1]
+        self.title.configure(text=f"VSVis Visualizer\n\n\nInference Running - {foldername}")
         if self.folder_path:
             self.start_menu_frame.pack_forget()
             # self.run_inference()            
@@ -310,12 +318,20 @@ class VSVisUI(ctk.CTk):
         self.range_mode = ctk.CTkButton(
             self.control_buttons_frame, text="Time Period", command=self.range_slider_init
         )
+        self.bounding_box = ctk.CTkButton(
+            self.control_buttons_frame, text="Enable BBox", command=self.toggle_drawing
+        )
+                # Connect Matplotlib events
         self.range_mode.grid(row=0, column=1, padx=21)
+        self.bounding_box.grid(row=0, column=2, padx=21)
 
         self.fig, self.ax = plt.subplots(figsize=(6, 4))
         self.chart_canvas = FigureCanvasTkAgg(self.fig, self.video_frame)
         self.chart_widget = self.chart_canvas.get_tk_widget()
         self.chart_widget.pack(fill=ctk.BOTH, expand=True)
+        self.chart_canvas.mpl_connect("button_press_event", self.on_press)
+        self.chart_canvas.mpl_connect("motion_notify_event", self.on_motion)
+        self.chart_canvas.mpl_connect("button_release_event", self.on_release)
 
         self.update_chart(self.current_frame)
 
@@ -436,7 +452,75 @@ class VSVisUI(ctk.CTk):
         self.timeline_slider.set(self.current_frame)
 
 
+    def toggle_drawing(self):
+        """Toggle the bounding box drawing mode."""
+        self.drawing_enabled = not self.drawing_enabled
+        self.bounding_box.configure(
+            text="Disable BBox" if self.drawing_enabled else "Enable BBox"
+        )
+
+        if not self.drawing_enabled:
+            self.clear_current_bounding_boxes()
+
+
+    def on_press(self, event):
+        """Handles the mouse press event."""
+        if self.drawing_enabled and event.inaxes:
+            # Clear the previous bounding box
+            if self.rect:
+                self.clear_current_bounding_boxes()
+            
+            self.start_x, self.start_y = event.xdata, event.ydata
+            self.rect = self.ax.add_patch(
+                plt.Rectangle((self.start_x, self.start_y), 0, 0,
+                              edgecolor="red", facecolor="none", linewidth=2)
+            )
+            self.is_drawing = True
+            self.chart_canvas.draw()
+
+        if not self.drawing_enabled:
+            # Remove all bounding boxes
+            self.clear_all_bounding_boxes()
+
+
+    def on_motion(self, event):
+        """Handles the mouse motion event."""
+        if self.drawing_enabled and self.is_drawing and event.inaxes and self.rect:
+            width = event.xdata - self.start_x
+            height = event.ydata - self.start_y
+            self.rect.set_width(width)
+            self.rect.set_height(height)
+            self.rect.set_xy((self.start_x, self.start_y))
+            self.chart_canvas.draw()
+
+    def on_release(self, event):
+        """Handles the mouse release event."""
+        if self.drawing_enabled and event.inaxes and self.rect:
+            x0, y0 = self.rect.get_xy()
+            width = self.rect.get_width()
+            height = self.rect.get_height()
+            x1 = x0 + width
+            y1 = y0 + height
+            self.bbox_coordinates = (min(x0, x1),
+                                     min(y0, y1),
+                                     max(x0, x1),
+                                     max(y0, y1))
+            self.is_drawing = False
+            print(f"Bounding Box Coordinates: {self.bbox_coordinates}")
+
+
+    def clear_current_bounding_boxes(self):
+        """Remove all bounding boxes."""
+        if self.rect:
+            self.rect.remove()
+            self.rect = None
         
+        self.start_x = self.start_y = None
+        self.bbox_coordinates = None
+        self.is_first_click = True
+        self.chart_canvas.draw()
+
+
     def quit(self):
         self.playing = False
         if self.cap:
