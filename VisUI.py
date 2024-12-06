@@ -1,3 +1,5 @@
+from denseav.shared import blur_dim
+from collections import defaultdict
 import customtkinter as ctk
 import cv2
 from tkinter import filedialog
@@ -8,8 +10,15 @@ import time
 import librosa
 import numpy as np
 import os
+import torch
+import torchaudio
+import torchvision.transforms as T
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from evaluation import get_alignment_score_object, get_glancing_score_object, \
+    get_alignment_score_word, get_glancing_score_word
 
 
 # Initialize customtkinter
@@ -39,6 +48,7 @@ class VSVisUI(ctk.CTk):
         self.bbox_btn = None
         self.drawing_enabled = False
         self.is_drawing = False
+        self.tensor = None
         # Variables for bounding box
         self.start_x = None
         self.start_y = None
@@ -94,19 +104,6 @@ class VSVisUI(ctk.CTk):
     def run_inference(self):
             
             self.title.configure(text=f"VSVis Visualizer\n\n\nRunning Inference - Initializing...")
-
-
-            import torch
-            import torchaudio
-            import torchvision
-            import torchvision.transforms as T
-            from torchaudio.functional import resample
-            from denseav.plotting import plot_attention_video, plot_2head_attention_video, plot_feature_video, display_video_in_notebook
-            from denseav.shared import blur_dim
-            from collections import defaultdict
-            import matplotlib.colors as mcolors
-            import torch.nn.functional as F
-
 
             # Check CUDA availability
             print("CUDA Available:", torch.cuda.is_available())
@@ -250,6 +247,8 @@ class VSVisUI(ctk.CTk):
             sims_all = prepped_sims["sims_all"].clamp_min(0)
             sims_all -= sims_all.min()
             sims_all = sims_all / sims_all.max()
+
+            self.tensor = sims_all.squeeze()
             cmap = get_inferno_with_alpha()
             layer = torch.tensor(cmap(sims_all.squeeze().detach().cpu())).permute(0, 3, 1, 2)
             
@@ -450,6 +449,7 @@ class VSVisUI(ctk.CTk):
         self.update_vis_label(f"Selected Range: {lval} to {rval}")
         self.seek_video(lval)
         self.timeline_slider.set(self.current_frame)
+        self.calculate_evaluation_metrics()
 
 
     def toggle_drawing(self):
@@ -497,16 +497,19 @@ class VSVisUI(ctk.CTk):
         """Handles the mouse release event."""
         if self.drawing_enabled and event.inaxes and self.rect:
             x0, y0 = self.rect.get_xy()
+            x0, y0 = int(x0), int(y0)
             width = self.rect.get_width()
             height = self.rect.get_height()
-            x1 = x0 + width
-            y1 = y0 + height
+            x1 = int(x0 + width)
+            y1 = int(y0 + height)
+
             self.bbox_coordinates = (min(x0, x1),
                                      min(y0, y1),
                                      max(x0, x1),
                                      max(y0, y1))
             self.is_drawing = False
             print(f"Bounding Box Coordinates: {self.bbox_coordinates}")
+            self.calculate_evaluation_metrics()
 
 
     def clear_current_bounding_boxes(self):
@@ -520,6 +523,47 @@ class VSVisUI(ctk.CTk):
         self.is_first_click = True
         self.chart_canvas.draw()
 
+
+    def calculate_evaluation_metrics(self):
+        
+        if self.bbox_coordinates and self.range_slider:
+            vals = self.range_slider.getValues()
+            lval = int(vals[0]*self.total_frames)
+            rval = int(vals[1]*self.total_frames)
+
+            as_obj = get_alignment_score_object(
+                self.tensor,
+                lval,
+                rval,
+                self.bbox_coordinates
+            )
+
+            as_word = get_alignment_score_word(
+                self.tensor,
+                lval,
+                rval,
+                self.bbox_coordinates
+            )
+            
+            glc_obj = get_glancing_score_object(
+                self.tensor,
+                lval,
+                rval,
+                self.bbox_coordinates
+            )
+
+            glc_word = get_alignment_score_word(
+                self.tensor,
+                lval,
+                rval,
+                self.bbox_coordinates
+            )
+            print(as_obj)
+            print(as_word)
+            print(glc_obj)
+            # as_word = eval.get_alignment_score_word()
+            # glc_obj = eval.get_glancing_score_object()
+            # glc_word = eval.get_glancing_score_word()
 
     def quit(self):
         self.playing = False
