@@ -17,9 +17,14 @@ def get_alignment_score_object(tensor, start, end, bounding_box):
     """Calculate the alignment score for objects as in
     Khorrami & Rasanen, 2021."""
 
-    # Normalize each frame of the tensor to sum to 1
-    frame_sums = tensor.sum(dim=(1, 2), keepdim=True)
-    T = tensor / frame_sums
+    # Compute the sum of each frame along (H, W) dimensions
+    frame_sums = tensor.view(tensor.shape[0], -1).sum(dim=1, keepdim=True)
+    
+    # Avoid division by zero
+    frame_sums = torch.where(frame_sums == 0, torch.ones_like(frame_sums), frame_sums)
+    
+    # Normalize each frame
+    T = tensor / frame_sums.view(tensor.shape[0], 1, 1)
 
     x0, y0, x1, y1 = bounding_box
 
@@ -41,7 +46,6 @@ def get_glancing_score_object(tensor, start, end, bounding_box):
     """Calculate the glancing score for objects as in Khorrami & Rasanen, 2021.
     """
     A = tensor[start:end+1].sum(axis=0)
-    print(A.shape)
     A = A / A.sum()
 
     mask = get_mask_from_bounding_box(tensor, bounding_box)
@@ -53,9 +57,10 @@ def get_glancing_score_word(tensor, start, end, bounding_box):
     Khorrami & Rasanen, 2021.
     """
     mask = get_mask_from_bounding_box(tensor, bounding_box)
-    a = (tensor * mask).sum(axis=0)
-    print(a.shape)
-    a = a / a.sum()
+    a = tensor * mask
+    frame_sums = a.view(tensor.shape[0], -1).sum(dim=1)
+    
+    a = frame_sums / frame_sums.sum()
         
     return a[start:end+1].sum()
 
