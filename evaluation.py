@@ -28,7 +28,7 @@ def get_alignment_score_object(tensor, start, end, bounding_box):
 
     x0, y0, x1, y1 = bounding_box
 
-    return T[start:end+1, y0:y1+1, x0:x1+1].sum() / (end - start)
+    return T[start:end+1, y0:y1+1, x0:x1+1].sum() / (end + 1 - start)
 
     
 def get_alignment_score_word(tensor, start, end, bounding_box):
