@@ -584,7 +584,7 @@ class VSVisUI(ctk.CTk):
                 self.bbox_coordinates
             )
 
-            glc_word = get_alignment_score_word(
+            glc_word = get_glancing_score_word(
                 self.tensor,
                 lval,
                 rval,
