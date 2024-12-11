@@ -1,4 +1,14 @@
 PyQt5==5.15.11
 Pillow==9.3.0
-numpy==1.23.5
+numpy
 scipy==1.9.3
+torchaudio
+torchvision
+customtkinter
+opencv-python
+pygame
+librosa
+matplotlib
+praatio
+pandas
+RangeSlider

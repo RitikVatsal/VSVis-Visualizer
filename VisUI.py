@@ -87,7 +87,7 @@ class VSVisUI(ctk.CTk):
     def inference_init(self):
         self.mode = 2
         self.title.configure(text="VSVis Visualizer\n\n- Inference & Visualization -\nInference Folder Select")
-        self.folder_path = filedialog.askdirectory(title="Select Folder")
+        self.folder_path = filedialog.askdirectory(title="Select Folder", initialdir=os.getcwd())
         foldername = self.folder_path.split("/")[-1]
         self.title.configure(text=f"VSVis Visualizer\n\n\nInference Running - {foldername}")
         if self.folder_path:
@@ -114,7 +114,7 @@ class VSVisUI(ctk.CTk):
             print("CUDA Device Name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No GPU found")
 
             # Load DenseAV model
-            model = torch.hub.load('mhamilton723/DenseAV', 'language').cuda()
+            model = torch.hub.load('mhamilton723/DenseAV', 'language')
             print("DenseAV model loaded successfully!")
 
             self.title.configure(text=f"VSVis Visualizer\n\n- Inference & Visualization -\nRunning Inference - Model Loaded. Loading Image and Audio...")
@@ -122,6 +122,7 @@ class VSVisUI(ctk.CTk):
             # Paths
             image_name = [f for f in os.listdir(self.folder_path) if f.endswith(".png")][0]
             audio_name = [f for f in os.listdir(self.folder_path) if f.endswith(".wav")][0]
+            print(f"Image: {image_name}, Audio: {audio_name}")
             image_path = os.path.join(self.folder_path, image_name)
             audio_path = os.path.join(self.folder_path, audio_name)
             output_video_path = os.path.join(self.folder_path, "temp_video.mp4")
@@ -143,6 +144,8 @@ class VSVisUI(ctk.CTk):
 
             video.release()
             print(f"Video created successfully at {output_video_path}")
+            print(f"The video contains {num_frames} frames with dimensions {width}x{height} pixels, matching the input image size.")
+
 
             # Extract audio and resample if necessary
             waveform, sample_rate = torchaudio.load(audio_path)
@@ -152,7 +155,7 @@ class VSVisUI(ctk.CTk):
                 waveform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sample_rate)(waveform)
 
             # Prepare audio input
-            audio_input = {"audio": waveform.cuda()}
+            audio_input = {"audio": waveform.cpu()}
 
             # Load video and extract frames
             cap = cv2.VideoCapture(output_video_path)
@@ -172,11 +175,15 @@ class VSVisUI(ctk.CTk):
             transform = T.Compose([
                 T.Resize((224, 224)),
                 T.ToTensor(),
-                T.Lambda(lambda x: x.cuda()),
+                T.Lambda(lambda x: x.cpu()),
             ])
 
             frames_tensor = torch.stack([transform(frame) for frame in frames])
-            print(f"Video frames tensor shape: {frames_tensor.shape}")  # Should be [num_frames, 3, 224, 224]
+            print(f"Video frames tensor shape: {frames_tensor.shape}")
+            print(f" - {frames_tensor.shape[0]}: Number of frames in the video.")
+            print(f" - {frames_tensor.shape[1]}: Number of color channels (RGB).")
+            print(f" - {frames_tensor.shape[2]}: Height of each frame (resized to 224 pixels).")
+            print(f" - {frames_tensor.shape[3]}: Width of each frame (resized to 224 pixels).")
 
             # Model Inference
 
@@ -195,9 +202,19 @@ class VSVisUI(ctk.CTk):
             ).mean(dim=-2).cpu()
             sim_by_head = blur_dim(sim_by_head, window=3, dim=-1)
 
-            print("Audio features:", {k: v.shape for k, v in audio_feats.items()})
-            print("Image features:", {k: v.shape for k, v in image_feats.items()})
-            print("Sim by head:", {sim_by_head.shape})
+            print("Audio feature extraction complete. Shapes:")
+            for k, v in audio_feats.items():
+                print(f" - {k}: {v.shape} (Feature vector per time step)")
+
+            print("Image feature extraction complete. Shapes:")
+            for k, v in image_feats.items():
+                print(f" - {k}: {v.shape} (Feature vector per frame)")
+
+            print(f"Similarity tensor shape: {sim_by_head.shape}")
+            print(" - First dimension: Number of frames.")
+            print(" - Second dimension: Attention heads.")
+            print(" - Third and fourth dimensions: Feature grid size for each frame.")
+
 
             self.title.configure(text=f"VSVis Visualizer\n\n- Inference & Visualization -\nInference Complete. Initializing Visualization...")
 
@@ -257,7 +274,7 @@ class VSVisUI(ctk.CTk):
             layer = torch.tensor(cmap(sims_all.squeeze().detach().cpu())).permute(0, 3, 1, 2)
             
             self.overlay = layer.permute(0, 2, 3, 1).cpu().numpy()
-            # np.save(os.path.join(self.folder_path, "overlay.npy"), self.overlay)
+            np.save(os.path.join(self.folder_path, "overlay.npy"), self.overlay)
 
             self.duration = audio_duration
             self.total_frames = num_frames
@@ -271,7 +288,7 @@ class VSVisUI(ctk.CTk):
         # Show a file dialog to select the video file
         self.mode = 1
         self.title.configure(text="VSVis Visualizer\n\nOnly Visualization\nFolder Select")
-        self.folder_path = filedialog.askdirectory(title="Select Folder")
+        self.folder_path = filedialog.askdirectory(title="Select Folder", initialdir=os.getcwd())
         if self.folder_path:
             self.title.configure(text=f"VSVis Visualizer\n\n- Only Visualization -\nRunning - {self.folder_path.split('/')[-1]}")
             # Hide the start menu
@@ -584,7 +601,7 @@ class VSVisUI(ctk.CTk):
                 self.bbox_coordinates
             )
 
-            glc_word = get_glancing_score_word(
+            glc_word = get_alignment_score_word(
                 self.tensor,
                 lval,
                 rval,
