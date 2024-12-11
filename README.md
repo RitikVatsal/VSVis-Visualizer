@@ -24,7 +24,8 @@
 1. **Clone the repository:**
 
 ```bash
-git clone <repository_url>
+git clone git clone https://github.com/RitikVatsal/VSVis-Visualizer.git
+
 cd VSVis-Visualizer
 ```
 
