@@ -4,6 +4,25 @@
 
 ---
 
+## Screenshots
+
+<div align="center">
+  <div style="display: inline-block; text-align: center; margin: 10px;">
+    <img src="assets/img-mountains_mountains.png" alt="Screenshot 1" width="200"/>
+    <p><strong>Figure 1:</strong> Model Attention when Audio is "... mountains."</p>
+  </div>
+  <div style="display: inline-block; text-align: center; margin: 10px;">
+    <img src="assets/img-mountains_people.png" alt="Screenshot 2" width="200"/>
+    <p><strong>Figure 2:</strong> Available Evaluations in VSVis</p>
+  </div>
+  <div style="display: inline-block; text-align: center; margin: 10px;">
+    <img src="assets/img-graph_title.png" alt="Screenshot 3" width="200"/>
+    <p><strong>Figure 3:</strong> VSVis Working with Infographics</p>
+  </div>
+</div>
+
+---
+
 ## Features
 - Visualize spatiotemporal attention from pre-computed model outputs or during inference.
 - Supports audio and image-based input for models.
